@@ -1,0 +1,82 @@
+{
+      "name": "PCD-1",
+      "questions": [
+        {
+          "question": "O que é uma thread?",
+          "correct": 3,
+		  "points":5,
+          "options": [
+            "Processo",
+            "Aplicação",
+            "Programa",
+            "Processo Ligeiro"
+          ]
+        },
+        {
+          "question": "Qual destas opções não é um método bloqueante?",
+          "correct": 2,
+		  "points":5,
+          "options": [
+            "join()",
+            "sleep(<millis>)",
+            "interrupted()",
+            "wait()"
+          ]
+        },
+        {
+          "question": "Qual é a vantagem de usar ThreadLocalRandom.current().nextInt() em vez de Random().nextInt()?",
+          "correct": 0,
+		  "points":3,
+          "options": [
+            "Para garantir que outras threads não usem a mesma seed na geração de números aleatórios",
+            "Para outros programadores saberem quem chama aquela função é uma thread",
+            "Para o JVM saber que o programa que chama a função é uma thread",
+            "Nenhuma das anteriores"
+          ]
+        },
+        {
+          "question": "Qual é o número máximo de threads que podem existir num sistema operativo?",
+          "correct": 3,
+		  "points":5,
+          "options": [
+            "Duas vezes o número de cores",
+            "Igual ao número de cores",
+            "16 mil threads",
+            "Não existe limite"
+          ]
+        },
+        {
+          "question": "Qual o nome do primeiro animal a ir ao espaço?",
+          "correct": 0,
+		  "points":5,
+          "options": [
+            "Laika",
+            "Gagarin",
+            "Max",
+            "Macaco Tião"
+          ]
+        },
+        {
+          "question": "Como se chamava a esposa de William Shakespeare?",
+          "correct": 3,
+		  "points":5,
+          "options": [
+            "Sandra Bullock",
+            "Kate Winslet",
+            "Parker Posey",
+            "Anne Hathaway"
+          ]
+        },
+        {
+          "question": "Qual o político português que liderou o maior número de governos depois do 25 de Abril?",
+          "correct": 1,
+		  "points":5,
+          "options": [
+            "Cavaco Silva",
+            "Vasco Gonçalves",
+            "Mário Soares",
+            "Francisco Balsemão"
+          ]
+        }
+      ]
+}
