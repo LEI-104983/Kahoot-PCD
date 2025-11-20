@@ -13,6 +13,7 @@ public class GameHandler {
     private final Map<String, TeamBarrier> teamBarriers;
     private final Map<Integer, Map<String, Integer>> questionAnswers; // questionIndex -> team -> answer
 
+    private Question currentQuestion;
     private Timer questionTimer;
     private boolean gameInProgress;
 
@@ -58,8 +59,8 @@ public class GameHandler {
     }
 
     private void sendNextQuestion() {
-        Question question = game.getQuiz().getNextQuestion();
-        if (question == null) {
+        currentQuestion = game.getQuiz().getNextQuestion();
+        if (currentQuestion == null) {
             endGame();
             return;
         }
@@ -85,7 +86,7 @@ public class GameHandler {
         questionAnswers.put(questionIndex, new ConcurrentHashMap<>());
 
         // Enviar pergunta a todos os jogadores
-        broadcastQuestion(question, questionIndex, isTeamQuestion);
+        broadcastQuestion(currentQuestion, questionIndex, isTeamQuestion);
 
         // Iniciar temporizador
         startQuestionTimer(questionIndex);
@@ -123,10 +124,17 @@ public class GameHandler {
         String teamId = answerMsg.getTeamId();
         int answer = answerMsg.getAnswer();
 
-        // Registar resposta
-        questionAnswers.get(questionIndex).put(teamId, answer);
 
         Question question = getCurrentQuestion();
+
+        // VALIDAR SE A PERGUNTA EXISTE
+        if (question == null) {
+            System.err.println(" ERRO: Pergunta é null para o índice: " + questionIndex);
+            return;
+        }
+
+        // Registar resposta
+        questionAnswers.get(questionIndex).put(teamId, answer);
         boolean isCorrect = question.isCorrect(answer);
         boolean isTeamQuestion = (questionIndex % 2 == 1);
 
@@ -173,25 +181,38 @@ public class GameHandler {
 
     private void calculateTeamScore(String teamId, Question question, int questionIndex) {
         Map<String, Integer> teamAnswers = questionAnswers.get(questionIndex);
-        boolean allCorrect = true;
-
-        // Verificar se todos os jogadores da equipa acertaram
         Team team = game.getTeams().get(teamId);
+
+        boolean allCorrect = true;
+        int correctCount = 0;
+
+        // ✅ VERIFICAR CADA JOGADOR DA EQUIPA INDIVIDUALMENTE
         for (Player player : team.getPlayers()) {
-            Integer answer = teamAnswers.get(teamId);
-            if (answer == null || !question.isCorrect(answer)) {
+            String playerKey = teamId + "_" + player.getUsername();
+            Integer answer = teamAnswers.get(playerKey);
+
+            if (answer == null) {
                 allCorrect = false;
-                break;
+                System.out.println("O" + player.getUsername() + " não respondeu");
+            } else if (!question.isCorrect(answer)) {
+                allCorrect = false;
+                System.out.println("O" + player.getUsername() + " respondeu errado: " + answer);
+            } else {
+                correctCount++;
+                System.out.println("O" + player.getUsername() + " respondeu corretamente");
             }
         }
 
         int points;
         if (allCorrect) {
             points = question.getPoints() * 2; // Dobro da pontuação
-            System.out.println("Equipa " + teamId + " ganhou " + points + " pontos (todos acertaram)");
-        } else {
+            System.out.println("🎯 Equipa " + teamId + " ganhou " + points + " pontos (TODOS acertaram)");
+        } else if (correctCount > 0) {
             points = question.getPoints(); // Pontuação normal
-            System.out.println("Equipa " + teamId + " ganhou " + points + " pontos");
+            System.out.println("🎯 Equipa " + teamId + " ganhou " + points + " pontos (" + correctCount + "/" + team.getPlayers().size() + " acertaram)");
+        } else {
+            points = 0;
+            System.out.println("💥 Equipa " + teamId + " não ganhou pontos (ninguém acertou)");
         }
 
         team.addTeamScore(points);
@@ -281,8 +302,10 @@ public class GameHandler {
     }
 
     private Question getCurrentQuestion() {
-        // Implementação simplificada - em produção obter do quiz
-        return game.getQuiz().getNextQuestion();
+        if (currentQuestion == null) {
+            System.err.println(" CurrentQuestion é null");
+        }
+        return currentQuestion;
     }
 
     public int getPlayerCount() {

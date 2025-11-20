@@ -3,6 +3,7 @@ package kahoot.game;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
+import java.io.IOException;
 
 public class Game implements Serializable {
     private final String gameId;
@@ -33,30 +34,23 @@ public class Game implements Serializable {
     }
 
     private Quiz createQuiz() {
-        Quiz quiz = new Quiz("PCD-Quiz");
+        try {
+            // FASE 3: Carregar perguntas aleatórias do JSON
+            Quiz quiz = Quiz.loadFromJson("quizzes.json", this.numQuestions);
 
-        // Pergunta 1 - Individual
-        quiz.addQuestion(new Question(
-                "O que é uma thread?",
-                new String[]{"Processo", "Aplicação", "Programa", "Processo Ligeiro"},
-                3, 5
-        ));
+            // Opcional: mostrar perguntas selecionadas (debug)
+            quiz.printSelectedQuestions();
 
-        // Pergunta 2 - Equipa
-        quiz.addQuestion(new Question(
-                "Qual destas opções não é um método bloqueante?",
-                new String[]{"join()", "sleep(<millis>)", "interrupted()", "wait()"},
-                2, 5
-        ));
+            return quiz;
 
-        // Pergunta 3 - Individual
-        quiz.addQuestion(new Question(
-                "Qual o político português que liderou o maior número de governos depois do 25 de Abril?",
-                new String[]{"Cavaco Silva", "Vasco Gonçalves", "Mário Soares", "Francisco Balsemão"},
-                1, 5
-        ));
+        } catch (IOException e) {
+            System.err.println(" Não foi possível carregar o quiz do ficheiro JSON");
+            System.err.println("  Detalhes: " + e.getMessage());
+            System.err.println("  Certifique-se que o ficheiro de quizzes está na pasta corretaa");
 
-        return quiz;
+            // Encerrar o jogo se não conseguir carregar as perguntas
+            throw new RuntimeException("Não foi possível carregar perguntas do ficheiro JSON", e);
+        }
     }
 
     public boolean addPlayer(String teamId, String username) {
