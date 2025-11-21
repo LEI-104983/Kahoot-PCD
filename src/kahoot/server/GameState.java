@@ -6,7 +6,7 @@ import kahoot.coordination.*;
 import java.util.*;
 import java.util.concurrent.*;
 
-public class GameHandler {
+public class GameState {
     private final Game game;
     private final Map<String, DealWithClient> connectedClients;
     private final Map<Integer, ModifiedCountdownLatch> individualLatches;
@@ -17,7 +17,7 @@ public class GameHandler {
     private Timer questionTimer;
     private boolean gameInProgress;
 
-    public GameHandler(String gameId, int numTeams, int playersPerTeam, int numQuestions) {
+    public GameState(String gameId, int numTeams, int playersPerTeam, int numQuestions) {
         this.game = new Game(gameId, numTeams, playersPerTeam, numQuestions);
         this.connectedClients = new ConcurrentHashMap<>();
         this.individualLatches = new ConcurrentHashMap<>();
@@ -107,7 +107,7 @@ public class GameHandler {
         questionTimer.schedule(new TimerTask() {
             @Override
             public void run() {
-                synchronized (GameHandler.this) {
+                synchronized (GameState.this) {
                     endQuestion(questionIndex);
                 }
             }
@@ -248,7 +248,7 @@ public class GameHandler {
         new Timer().schedule(new TimerTask() {
             @Override
             public void run() {
-                synchronized (GameHandler.this) {
+                synchronized (GameState.this) {
                     game.incrementQuestion();
                     sendNextQuestion();
                 }

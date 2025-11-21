@@ -45,7 +45,7 @@ public class DealWithClient implements Runnable {
         this.gameId = msg.getGameId();
         this.username = msg.getUsername();
 
-        GameHandler game = server.getGame(gameId);
+        GameState game = server.getGame(gameId);
         if (game == null) {
             sendMessage(new ErrorMessage(gameId, "", username, "Jogo não encontrado: " + gameId));
             disconnect();
@@ -63,7 +63,7 @@ public class DealWithClient implements Runnable {
     }
 
     private void handleAnswer(AnswerMessage msg) {
-        GameHandler game = server.getGame(gameId);
+        GameState game = server.getGame(gameId);
         if (game != null) {
             game.processAnswer(msg);
         }

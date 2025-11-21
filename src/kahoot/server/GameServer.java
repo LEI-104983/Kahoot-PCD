@@ -11,7 +11,7 @@ import java.util.concurrent.Executors;
 
 public class GameServer {
     private ServerSocket serverSocket;
-    private final Map<String, GameHandler> activeGames;
+    private final Map<String, GameState> activeGames;
     private final ExecutorService threadPool;
     private boolean running;
 
@@ -86,7 +86,7 @@ public class GameServer {
 
             // GERAR GAME ID MAIS SIMPLES
             String gameId = "game" + (activeGames.size() + 1);
-            GameHandler game = new GameHandler(gameId, numTeams, playersPerTeam, numQuestions);
+            GameState game = new GameState(gameId, numTeams, playersPerTeam, numQuestions);
             activeGames.put(gameId, game);
 
             System.out.println("🎮 JOGO CRIADO: " + gameId);
@@ -108,12 +108,12 @@ public class GameServer {
 
         System.out.println("Jogos ativos:");
         for (String gameId : activeGames.keySet()) {
-            GameHandler game = activeGames.get(gameId);
+            GameState game = activeGames.get(gameId);
             System.out.println(" - " + gameId + ": " + game.getPlayerCount() + " jogadores conectados");
         }
     }
 
-    public GameHandler getGame(String gameId) {
+    public GameState getGame(String gameId) {
         return activeGames.get(gameId);
     }
 
