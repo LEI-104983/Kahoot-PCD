@@ -86,7 +86,7 @@ public class GameServer {
 
             // GERAR GAME ID MAIS SIMPLES
             String gameId = "game" + (activeGames.size() + 1);
-            GameHandler game = new GameHandler(gameId, numTeams, playersPerTeam, numQuestions);
+            GameHandler game = new GameHandler(gameId, numTeams, playersPerTeam, numQuestions, this);
             activeGames.put(gameId, game);
 
             System.out.println("🎮 JOGO CRIADO: " + gameId);

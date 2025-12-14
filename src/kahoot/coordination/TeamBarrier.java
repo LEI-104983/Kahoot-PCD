@@ -50,7 +50,20 @@ public class TeamBarrier {
                     break;
                 }
 
-                condition.await();
+                // Usar await com timeout para evitar bloqueio indefinido
+                try {
+                    boolean timedOut = !condition.await(remaining, java.util.concurrent.TimeUnit.MILLISECONDS);
+                    if (timedOut && arrived < teamSize) {
+                        broken = true;
+                        condition.signalAll();
+                        break;
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    broken = true;
+                    condition.signalAll();
+                    break;
+                }
             }
 
             return position;

@@ -5,7 +5,7 @@ import java.io.Serializable;
 public class Player implements Serializable {
     private final String username;
     private final String teamId;
-    private int score;
+    private volatile int score;
 
     public Player(String username, String teamId) {
         this.username = username;
@@ -16,5 +16,9 @@ public class Player implements Serializable {
     public String getUsername() { return username; }
     public String getTeamId() { return teamId; }
     public int getScore() { return score; }
-    public void addScore(int points) { this.score += points; }
+    
+    // Thread-safe: usando synchronized para evitar race conditions
+    public synchronized void addScore(int points) { 
+        this.score += points; 
+    }
 }

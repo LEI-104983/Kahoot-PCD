@@ -51,4 +51,13 @@ public class ModifiedCountdownLatch {
     public synchronized boolean isTimedOut() {
         return timedOut;
     }
+
+    // Reset para nova pergunta
+    public synchronized void reset(int newCount) {
+        this.count = newCount;
+        this.currentBonus = 0;
+        this.timedOut = false;
+        this.startTime = System.currentTimeMillis();
+        notifyAll(); // Acordar threads que possam estar esperando
+    }
 }

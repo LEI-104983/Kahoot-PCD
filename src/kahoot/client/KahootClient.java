@@ -26,6 +26,7 @@ public class KahootClient {
 
     private int currentScore = 0;
     private boolean answeringEnabled = false;
+    private Thread currentTimerThread = null; // Referência à thread do timer atual
 
     public KahootClient(String serverIP, int port, String gameId, String teamId, String username) {
         this.gameId = gameId;
@@ -89,20 +90,6 @@ public class KahootClient {
             final int answerIndex = i;
             answerButtons[i].addActionListener(e -> sendAnswer(answerIndex));
 
-            // Efeito hover
-            answerButtons[i].addMouseListener(new MouseAdapter() {
-                public void mouseEntered(MouseEvent e) {
-                    if (answerButtons[answerIndex].isEnabled()) {
-                        answerButtons[answerIndex].setBackground(colors[answerIndex].darker());
-                    }
-                }
-                public void mouseExited(MouseEvent e) {
-                    if (answerButtons[answerIndex].isEnabled()) {
-                        answerButtons[answerIndex].setBackground(colors[answerIndex]);
-                    }
-                }
-            });
-
             answersPanel.add(answerButtons[i]);
         }
 
@@ -134,6 +121,8 @@ public class KahootClient {
         frame.setVisible(true);
     }
 
+
+
     private void connectToServer(String serverIP, int port) {
         try {
             socket = new Socket(serverIP, port);
@@ -157,6 +146,8 @@ public class KahootClient {
             System.exit(1);
         }
     }
+
+
 
     private void receiveMessages() {
         try {
@@ -189,6 +180,9 @@ public class KahootClient {
         Question question = msg.getQuestion();
         roundLabel.setText("Ronda: " + (msg.getQuestionIndex() + 1));
 
+        // Parar timer anterior se existir
+        stopTimer();
+
         questionLabel.setText("<html><div style='text-align: center;'>" +
                 question.getQuestion() + "</div></html>");
 
@@ -210,37 +204,68 @@ public class KahootClient {
                 (msg.isTeamQuestion() ? " (Equipa)" : " (Individual)"));
     }
 
+    private void stopTimer() {
+        if (currentTimerThread != null && currentTimerThread.isAlive()) {
+            currentTimerThread.interrupt();
+            currentTimerThread = null;
+        }
+    }
+
     private void startTimer(int seconds) {
-        new Thread(() -> {
+        // Parar timer anterior se existir
+        stopTimer();
+
+        // Criar nova thread do timer
+        currentTimerThread = new Thread(() -> {
+            Thread timerThread = Thread.currentThread();
             for (int i = seconds; i >= 0; i--) {
+                // Verificar se foi interrompido antes de atualizar UI
+                if (timerThread.isInterrupted()) {
+                    return; // Sair se foi interrompido
+                }
+
                 final int timeLeft = i;
+                final boolean wasInterrupted = timerThread.isInterrupted();
+                
                 SwingUtilities.invokeLater(() -> {
-                    timerLabel.setText("Tempo: " + timeLeft + "s");
-                    if (timeLeft <= 10) {
-                        timerLabel.setForeground(Color.RED);
-                        timerLabel.setFont(new Font("Arial", Font.BOLD, 22));
-                    } else if (timeLeft <= 20) {
-                        timerLabel.setForeground(Color.ORANGE);
-                    } else {
-                        timerLabel.setForeground(Color.BLACK);
+                    // Só atualizar se não foi interrompido
+                    if (!wasInterrupted && currentTimerThread == timerThread) {
+                        timerLabel.setText("Tempo: " + timeLeft + "s");
+                        if (timeLeft <= 10) {
+                            timerLabel.setForeground(Color.RED);
+                            timerLabel.setFont(new Font("Arial", Font.BOLD, 22));
+                        } else if (timeLeft <= 20) {
+                            timerLabel.setForeground(Color.ORANGE);
+                            timerLabel.setFont(new Font("Arial", Font.BOLD, 20));
+                        } else {
+                            timerLabel.setForeground(Color.BLACK);
+                            timerLabel.setFont(new Font("Arial", Font.BOLD, 20));
+                        }
                     }
                 });
 
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e) {
-                    break;
+                    // Timer foi interrompido (nova pergunta chegou)
+                    return;
                 }
             }
 
-            SwingUtilities.invokeLater(() -> {
-                answeringEnabled = false;
-                for (JButton button : answerButtons) {
-                    button.setEnabled(false);
-                }
-                timerLabel.setText("Tempo esgotado!");
-            });
-        }).start();
+            // Timer terminou naturalmente (não foi interrompido)
+            if (!timerThread.isInterrupted() && currentTimerThread == timerThread) {
+                SwingUtilities.invokeLater(() -> {
+                    answeringEnabled = false;
+                    for (JButton button : answerButtons) {
+                        button.setEnabled(false);
+                    }
+                    timerLabel.setText("Tempo esgotado!");
+                    timerLabel.setForeground(Color.RED);
+                });
+            }
+        });
+        
+        currentTimerThread.start();
     }
 
     private void sendAnswer(int answerIndex) {
@@ -252,6 +277,9 @@ public class KahootClient {
             for (JButton button : answerButtons) {
                 button.setEnabled(false);
             }
+
+            // Parar timer (já respondeu)
+            stopTimer();
 
             // Destacar resposta selecionada
             answerButtons[answerIndex].setBackground(answerButtons[answerIndex].getBackground().brighter());

@@ -17,6 +17,13 @@ public class DealWithClient implements Runnable {
         this.clientSocket = socket;
         this.server = server;
         this.connected = true;
+        
+        // Configurar timeout de conexão (60 segundos)
+        try {
+            socket.setSoTimeout(60000);
+        } catch (SocketException e) {
+            System.err.println("Erro ao configurar timeout: " + e.getMessage());
+        }
     }
 
     @Override
@@ -26,11 +33,17 @@ public class DealWithClient implements Runnable {
             in = new ObjectInputStream(clientSocket.getInputStream());
 
             while (connected) {
-                Object obj = in.readObject();
-                if (obj instanceof EnrollmentMessage) {
-                    handleEnrollment((EnrollmentMessage) obj);
-                } else if (obj instanceof AnswerMessage) {
-                    handleAnswer((AnswerMessage) obj);
+                try {
+                    Object obj = in.readObject();
+                    if (obj instanceof EnrollmentMessage) {
+                        handleEnrollment((EnrollmentMessage) obj);
+                    } else if (obj instanceof AnswerMessage) {
+                        handleAnswer((AnswerMessage) obj);
+                    }
+                } catch (java.net.SocketTimeoutException e) {
+                    // Timeout - cliente inativo, mas manter conexão
+                    // Pode ser usado para heartbeat no futuro
+                    continue;
                 }
             }
 
@@ -81,6 +94,15 @@ public class DealWithClient implements Runnable {
 
     private void disconnect() {
         connected = false;
+        
+        // Notificar GameHandler sobre desconexão
+        if (gameId != null && username != null) {
+            GameHandler game = server.getGame(gameId);
+            if (game != null) {
+                game.removePlayer(username);
+            }
+        }
+        
         try {
             if (in != null) in.close();
             if (out != null) out.close();
