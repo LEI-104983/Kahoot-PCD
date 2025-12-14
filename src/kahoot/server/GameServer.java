@@ -4,20 +4,23 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class GameServer {
     private ServerSocket serverSocket;
-    private final Map<String, GameState> activeGames;
+    private final Map<String, GameState> activeGames = new ConcurrentHashMap<>();
+    private final Map<String, List<DealWithClient>> gameConnections = new ConcurrentHashMap<>();
     private final ExecutorService threadPool;
     private boolean running;
 
     public GameServer(int port) throws IOException {
         this.serverSocket = new ServerSocket(port);
-        this.activeGames = new HashMap<>();
         this.threadPool = Executors.newFixedThreadPool(10);
         this.running = true;
     }
@@ -44,6 +47,17 @@ public class GameServer {
                     System.out.println("Erro ao aceitar conexão: " + e.getMessage());
                 }
             }
+        }
+    }
+
+    public void addConnectionToGame(String gameId, DealWithClient client) {
+        gameConnections.computeIfAbsent(gameId, k -> new CopyOnWriteArrayList<>()).add(client);
+    }
+
+    public void removeConnectionFromGame(String gameId, DealWithClient client) {
+        List<DealWithClient> connections = gameConnections.get(gameId);
+        if (connections != null) {
+            connections.remove(client);
         }
     }
 

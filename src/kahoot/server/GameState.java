@@ -17,6 +17,7 @@ public class GameState {
     private Timer questionTimer;
     private boolean gameInProgress;
 
+    //Possibilidade de multiplos jogos em simultaneo
     public GameState(String gameId, int numTeams, int playersPerTeam, int numQuestions) {
         this.game = new Game(gameId, numTeams, playersPerTeam, numQuestions);
         this.connectedClients = new ConcurrentHashMap<>();
@@ -97,11 +98,13 @@ public class GameState {
                 game.getGameId(), "", "", question, 30, questionIndex, isTeamQuestion
         );
 
+        // ENVIA PARA TODOS OS CLIENTES CONECTADOS A ESTE JOGO
         for (DealWithClient client : connectedClients.values()) {
             client.sendMessage(msg);
         }
     }
 
+        // Iniciar temporizador para a pergunta do synchronized ??
     private void startQuestionTimer(int questionIndex) {
         questionTimer = new Timer();
         questionTimer.schedule(new TimerTask() {
@@ -263,8 +266,7 @@ public class GameState {
         }
 
         for (DealWithClient client : connectedClients.values()) {
-            // Calcular pontos da ronda atual (simplificado)
-            int currentRoundPoints = 0; // Implementar cálculo específico
+            int currentRoundPoints = 0;         // VERIFICAR COMO POR PONTOS POR RONDA
 
             ScoreMessage scoreMsg = new ScoreMessage(
                     game.getGameId(), "", "", teamScores, currentRoundPoints, questionIndex
@@ -311,4 +313,5 @@ public class GameState {
     public int getPlayerCount() {
         return connectedClients.size();
     }
+
 }

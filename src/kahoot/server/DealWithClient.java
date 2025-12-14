@@ -3,6 +3,8 @@ package kahoot.server;
 import kahoot.messages.*;
 import java.io.*;
 import java.net.*;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class DealWithClient implements Runnable {
     private final Socket clientSocket;
@@ -12,6 +14,8 @@ public class DealWithClient implements Runnable {
     private String username;
     private String gameId;
     private boolean connected;
+    private String currentGameId;
+    private final Map<String, GameState> subscribedGames = new ConcurrentHashMap<>();
 
     public DealWithClient(Socket socket, GameServer server) {
         this.clientSocket = socket;
@@ -42,28 +46,30 @@ public class DealWithClient implements Runnable {
     }
 
     private void handleEnrollment(EnrollmentMessage msg) {
-        this.gameId = msg.getGameId();
+        this.currentGameId = msg.getGameId();
         this.username = msg.getUsername();
 
-        GameState game = server.getGame(gameId);
+        GameState game = server.getGame(currentGameId);
         if (game == null) {
-            sendMessage(new ErrorMessage(gameId, "", username, "Jogo não encontrado: " + gameId));
+            // ✅ MANTENDO A ASSINATURA ORIGINAL
+            sendMessage(new ErrorMessage(currentGameId, "", username, "Jogo não encontrado: " + currentGameId));
             disconnect();
             return;
         }
 
         boolean success = game.addPlayer(msg.getTeamId(), username, this);
+
         if (!success) {
-            sendMessage(new ErrorMessage(gameId, msg.getTeamId(), username,
+            sendMessage(new ErrorMessage(currentGameId, msg.getTeamId(), username,
                     "Não foi possível juntar-se ao jogo. Equipa cheia ou username duplicado."));
             disconnect();
         } else {
-            sendMessage(new ErrorMessage(gameId, msg.getTeamId(), username, "SUCCESS: Juntou-se à equipa " + msg.getTeamId()));
+            sendMessage(new ErrorMessage(currentGameId, msg.getTeamId(), username, "SUCCESS: Juntou-se à equipa " + msg.getTeamId()));
         }
     }
 
     private void handleAnswer(AnswerMessage msg) {
-        GameState game = server.getGame(gameId);
+        GameState game = server.getGame(currentGameId); // Usa currentGameId, não msg.getGameId()
         if (game != null) {
             game.processAnswer(msg);
         }
@@ -88,9 +94,5 @@ public class DealWithClient implements Runnable {
         } catch (IOException e) {
             // Ignorar
         }
-    }
-
-    public String getUsername() {
-        return username;
     }
 }
