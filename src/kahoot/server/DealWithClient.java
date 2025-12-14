@@ -42,7 +42,7 @@ public class DealWithClient implements Runnable {
                     }
                 } catch (java.net.SocketTimeoutException e) {
                     // Timeout - cliente inativo, mas manter conexão
-                    // Pode ser usado para heartbeat no futuro
+                    // TODO: Pode ser usado para heartbeat no futuro
                     continue;
                 }
             }
@@ -58,7 +58,7 @@ public class DealWithClient implements Runnable {
         this.gameId = msg.getGameId();
         this.username = msg.getUsername();
 
-        GameHandler game = server.getGame(gameId);
+        GameState game = server.getGame(gameId);
         if (game == null) {
             sendMessage(new ErrorMessage(gameId, "", username, "Jogo não encontrado: " + gameId));
             disconnect();
@@ -76,7 +76,7 @@ public class DealWithClient implements Runnable {
     }
 
     private void handleAnswer(AnswerMessage msg) {
-        GameHandler game = server.getGame(gameId);
+        GameState game = server.getGame(gameId);
         if (game != null) {
             game.processAnswer(msg);
         }
@@ -97,7 +97,7 @@ public class DealWithClient implements Runnable {
         
         // Notificar GameHandler sobre desconexão
         if (gameId != null && username != null) {
-            GameHandler game = server.getGame(gameId);
+            GameState game = server.getGame(gameId);
             if (game != null) {
                 game.removePlayer(username);
             }

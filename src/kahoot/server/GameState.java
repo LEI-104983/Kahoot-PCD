@@ -5,23 +5,22 @@ import kahoot.messages.*;
 import kahoot.coordination.*;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 
-public class GameHandler {
+public class GameState {
     private final Game game;
     private final Map<String, DealWithClient> connectedClients;
     private final Map<Integer, ModifiedCountdownLatch> individualLatches;
     private final Map<String, TeamBarrier> teamBarriers;
-    private final Map<Integer, Map<String, Integer>> questionAnswers; // questionIndex -> playerKey -> answer
-    private final Map<Integer, Set<String>> answeredPlayers; // questionIndex -> set of players who answered
+    private final Map<Integer, Map<String, Integer>> questionAnswers; // questionIndex -> playerKey -> resposta
+    private final Map<Integer, Set<String>> answeredPlayers; // questionIndex -> conjunto de jogadores que responderam
     private final GameServer server; // Referência ao servidor para limpeza
 
     private Question currentQuestion;
     private Timer questionTimer;
     private boolean gameInProgress;
-    private final Map<Integer, AtomicBoolean> questionEnded; // questionIndex -> already ended flag
+    private final Map<Integer, Boolean> questionEnded; // questionIndex -> already ended flag
 
-    public GameHandler(String gameId, int numTeams, int playersPerTeam, int numQuestions, GameServer server) {
+    public GameState(String gameId, int numTeams, int playersPerTeam, int numQuestions, GameServer server) {
         this.game = new Game(gameId, numTeams, playersPerTeam, numQuestions);
         this.server = server;
         this.connectedClients = new ConcurrentHashMap<>();
@@ -104,7 +103,7 @@ public class GameHandler {
         // Inicializar estruturas para respostas
         questionAnswers.put(questionIndex, new ConcurrentHashMap<>());
         answeredPlayers.put(questionIndex, ConcurrentHashMap.newKeySet());
-        questionEnded.put(questionIndex, new AtomicBoolean(false));
+        questionEnded.put(questionIndex, false);
 
         // Enviar pergunta a todos os jogadores
         broadcastQuestion(currentQuestion, questionIndex, isTeamQuestion);
@@ -133,9 +132,10 @@ public class GameHandler {
         questionTimer.schedule(new TimerTask() {
             @Override
             public void run() {
-                synchronized (GameHandler.this) {
-                    AtomicBoolean ended = questionEnded.get(questionIndex);
-                    if (ended != null && ended.compareAndSet(false, true)) {
+                synchronized (GameState.this) {
+                    Boolean ended = questionEnded.get(questionIndex);
+                    if (ended != null && !ended) {
+                        questionEnded.put(questionIndex, true);
                         endQuestion(questionIndex);
                     }
                 }
@@ -154,8 +154,8 @@ public class GameHandler {
         int answer = answerMsg.getAnswer();
 
         // Verificar se a pergunta já terminou
-        AtomicBoolean ended = questionEnded.get(questionIndex);
-        if (ended == null || ended.get()) {
+        Boolean ended = questionEnded.get(questionIndex);
+        if (ended == null || ended) {
             return; // Pergunta já terminou, ignorar resposta tardia
         }
 
@@ -193,8 +193,10 @@ public class GameHandler {
 
         // Verificar se todas as respostas foram recebidas
         if (allAnswersReceived(questionIndex)) {
-            // Usar compareAndSet para garantir que só uma thread executa endQuestion
-            if (ended.compareAndSet(false, true)) {
+            // Verificar novamente dentro do synchronized para garantir execução única
+            Boolean stillEnded = questionEnded.get(questionIndex);
+            if (stillEnded != null && !stillEnded) {
+                questionEnded.put(questionIndex, true);
                 endQuestion(questionIndex);
             }
         }
@@ -298,26 +300,18 @@ public class GameHandler {
         }
 
         // Marcar pergunta como terminada
-        AtomicBoolean ended = questionEnded.get(questionIndex);
-        if (ended != null) {
-            ended.set(true);
-        }
+        questionEnded.put(questionIndex, true);
 
         // Enviar pontuações atualizadas
         broadcastScores(questionIndex);
 
-        // Preparar próxima pergunta após pequena pausa
-        new Timer().schedule(new TimerTask() {
-            @Override
-            public void run() {
-                synchronized (GameHandler.this) {
-                    if (!game.isGameEnded()) {
-                        game.incrementQuestion();
-                        sendNextQuestion();
-                    }
-                }
+        // Preparar próxima pergunta
+        synchronized (this) {
+            if (!game.isGameEnded()) {
+                game.incrementQuestion();
+                sendNextQuestion();
             }
-        }, 3000); // 3 segundos de pausa
+        }
     }
 
     private void broadcastScores(int questionIndex) {
@@ -328,7 +322,7 @@ public class GameHandler {
 
         for (DealWithClient client : connectedClients.values()) {
             // Calcular pontos da ronda atual (simplificado)
-            int currentRoundPoints = 0; // Implementar cálculo específico
+            int currentRoundPoints = 0; // TODO: Implementar cálculo específico
 
             ScoreMessage scoreMsg = new ScoreMessage(
                     game.getGameId(), "", "", teamScores, currentRoundPoints, questionIndex
@@ -363,17 +357,6 @@ public class GameHandler {
         }
 
         System.out.println("Jogo " + game.getGameId() + " terminado! Vencedor: " + winningTeam);
-        
-        // Remover jogo do servidor após um delay (para permitir que clientes vejam resultados)
-        new Timer().schedule(new TimerTask() {
-            @Override
-            public void run() {
-                if (server != null) {
-                    server.removeGame(game.getGameId());
-                    System.out.println("Jogo " + game.getGameId() + " removido do servidor");
-                }
-            }
-        }, 5000); // Remover após 5 segundos
     }
 
     private Question getCurrentQuestion() {

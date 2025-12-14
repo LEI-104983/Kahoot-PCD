@@ -5,7 +5,7 @@ import java.io.Serializable;
 public class Player implements Serializable {
     private final String username;
     private final String teamId;
-    private volatile int score;
+    private int score;
 
     public Player(String username, String teamId) {
         this.username = username;

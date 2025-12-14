@@ -26,7 +26,7 @@ public class KahootClient {
 
     private int currentScore = 0;
     private boolean answeringEnabled = false;
-    private Thread currentTimerThread = null; // Referência à thread do timer atual
+    private Thread currentTimerThread = null; // Referência para a thread do timer atual
 
     public KahootClient(String serverIP, int port, String gameId, String teamId, String username) {
         this.gameId = gameId;
@@ -219,7 +219,7 @@ public class KahootClient {
         currentTimerThread = new Thread(() -> {
             Thread timerThread = Thread.currentThread();
             for (int i = seconds; i >= 0; i--) {
-                // Verificar se foi interrompido antes de atualizar UI
+                // Verificar se foi interrompido antes de atualizar interface
                 if (timerThread.isInterrupted()) {
                     return; // Sair se foi interrompido
                 }
