@@ -27,6 +27,7 @@ public class KahootClient {
     private int currentScore = 0;
     private boolean answeringEnabled = false;
     private Thread currentTimerThread = null; // Referência para a thread do timer atual
+    private int currentQuestionIndex = -1;
 
     public KahootClient(String serverIP, int port, String gameId, String teamId, String username) {
         this.gameId = gameId;
@@ -178,7 +179,8 @@ public class KahootClient {
 
     private void handleQuestionMessage(QuestionMessage msg) {
         Question question = msg.getQuestion();
-        roundLabel.setText("Ronda: " + (msg.getQuestionIndex() + 1));
+        currentQuestionIndex = msg.getQuestionIndex();
+        roundLabel.setText("Ronda: " + (currentQuestionIndex + 1));
 
         // Parar timer anterior se existir
         stopTimer();
@@ -200,7 +202,7 @@ public class KahootClient {
         answeringEnabled = true;
         startTimer(msg.getTimeLimit());
 
-        updateStatus("Pergunta " + (msg.getQuestionIndex() + 1) +
+        updateStatus("Pergunta " + (currentQuestionIndex + 1) +
                 (msg.isTeamQuestion() ? " (Equipa)" : " (Individual)"));
     }
 
@@ -284,7 +286,7 @@ public class KahootClient {
             // Destacar resposta selecionada
             answerButtons[answerIndex].setBackground(answerButtons[answerIndex].getBackground().brighter());
 
-            AnswerMessage answerMsg = new AnswerMessage(gameId, teamId, username, 0, answerIndex);
+            AnswerMessage answerMsg = new AnswerMessage(gameId, teamId, username, currentQuestionIndex, answerIndex);
             out.writeObject(answerMsg);
             out.flush();
 

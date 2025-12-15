@@ -78,7 +78,7 @@ Este documento mapeia cada seção e requisito do enunciado do projeto Kahoot-PC
 
 - **Placar**: `src/kahoot/game/Team.java` e `src/kahoot/game/Player.java`
   - `Team.teamScore` e `Player.score`
-  - Atualizado em `GameHandler.updateScores()` (linha 271-280)
+  - Atualizado em `GameHandler.u7pdateScores()` (linha 271-280)
 
 ### 1.4 Placar de desempenho
 

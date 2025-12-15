@@ -79,6 +79,17 @@ public class TeamBarrier {
             arrived = 0;
             broken = false;
             startTime = System.currentTimeMillis();
+            condition.signalAll(); // Acordar threads bloqueadas
+        } finally {
+            lock.unlock();
+        }
+    }
+    
+    public void breakBarrier() {
+        lock.lock();
+        try {
+            broken = true;
+            condition.signalAll(); // Acordar todas as threads bloqueadas
         } finally {
             lock.unlock();
         }
