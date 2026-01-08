@@ -14,6 +14,7 @@ public class GameState {
     private final Map<Integer, Map<String, Integer>> questionAnswers; // questionIndex -> playerKey -> resposta
     private final Map<Integer, Set<String>> answeredPlayers; // questionIndex -> conjunto de jogadores que responderam
     private final GameServer server; // Referência ao servidor para limpeza
+    private final Map<Integer, Thread> awaitThreads; // questionIndex -> thread que chama await()
 
     private Question currentQuestion;
     private Timer questionTimer;
@@ -29,6 +30,7 @@ public class GameState {
         this.questionAnswers = new ConcurrentHashMap<>();
         this.answeredPlayers = new ConcurrentHashMap<>();
         this.questionEnded = new ConcurrentHashMap<>();
+        this.awaitThreads = new ConcurrentHashMap<>();
         this.gameInProgress = false;
 
         // Inicializar barreiras para cada equipa
@@ -96,8 +98,11 @@ public class GameState {
             if (latch != null) {
                 latch.reset(totalPlayers);
             } else {
-                individualLatches.put(questionIndex, new ModifiedCountdownLatch(2, 2, 30000, totalPlayers));
+                individualLatches.put(questionIndex, new ModifiedCountdownLatch(2, 2, totalPlayers));
             }
+            
+            // Criar thread que chama await() para esperar até todos responderem
+            startAwaitThread(questionIndex);
         }
 
         // Inicializar estruturas para respostas
@@ -122,6 +127,37 @@ public class GameState {
         }
     }
 
+    private void startAwaitThread(int questionIndex) {
+        // Cancelar thread anterior se existir
+        Thread previousThread = awaitThreads.get(questionIndex);
+        if (previousThread != null && previousThread.isAlive()) {
+            previousThread.interrupt();
+        }
+        
+        ModifiedCountdownLatch latch = individualLatches.get(questionIndex);
+        Thread awaitThread = new Thread(() -> {
+            try {
+                // Thread bloqueia aqui até o contador chegar a zero
+                latch.await();
+                
+                // Quando o contador chegar a zero (todos responderam), terminar a pergunta
+                synchronized (GameState.this) {
+                    Boolean ended = questionEnded.get(questionIndex);
+                    if (ended != null && !ended) {
+                        questionEnded.put(questionIndex, true);
+                        endQuestion(questionIndex);
+                    }
+                }
+            } catch (InterruptedException e) {
+                // Thread foi interrompida (timeout ou nova pergunta)
+                Thread.currentThread().interrupt();
+            }
+        });
+        
+        awaitThread.start();
+        awaitThreads.put(questionIndex, awaitThread);
+    }
+
     private void startQuestionTimer(int questionIndex) {
         // Cancelar timer anterior se existir
         if (questionTimer != null) {
@@ -136,6 +172,11 @@ public class GameState {
                     Boolean ended = questionEnded.get(questionIndex);
                     if (ended != null && !ended) {
                         questionEnded.put(questionIndex, true);
+                        // Interromper thread await se ainda estiver esperando
+                        Thread awaitThread = awaitThreads.get(questionIndex);
+                        if (awaitThread != null && awaitThread.isAlive()) {
+                            awaitThread.interrupt();
+                        }
                         endQuestion(questionIndex);
                     }
                 }
@@ -204,15 +245,21 @@ public class GameState {
 
     private void processIndividualAnswer(String teamId, String username, Question question,
                                          boolean isCorrect, int questionIndex) {
+        ModifiedCountdownLatch latch = individualLatches.get(questionIndex);
+        
+        // TODOS os jogadores chamam countDown() para decrementar o contador
+        int bonus = latch.countDown();
+        
+        // Apenas os que acertam recebem pontos (com bónus se aplicável)
         if (isCorrect) {
-            ModifiedCountdownLatch latch = individualLatches.get(questionIndex);
-            int bonus = latch.countDown();
             int points = question.getPoints() * bonus;
-
+            
             // Atualizar pontuação do jogador e da equipa
             updateScores(teamId, username, points);
-
+            
             System.out.println(username + " (" + teamId + ") ganhou " + points + " pontos (bónus: " + bonus + ")");
+        } else {
+            System.out.println(username + " (" + teamId + ") respondeu incorretamente");
         }
     }
 
@@ -297,6 +344,12 @@ public class GameState {
         if (questionTimer != null) {
             questionTimer.cancel();
             questionTimer = null;
+        }
+        
+        // Interromper thread await se ainda estiver esperando
+        Thread awaitThread = awaitThreads.get(questionIndex);
+        if (awaitThread != null && awaitThread.isAlive()) {
+            awaitThread.interrupt();
         }
 
         // Marcar pergunta como terminada
