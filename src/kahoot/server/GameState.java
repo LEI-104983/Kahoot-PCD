@@ -184,7 +184,7 @@ public class GameState {
         }, 30000); // 30 segundos
     }
 
-    public synchronized void processAnswer(AnswerMessage answerMsg) {
+    public void processAnswer(AnswerMessage answerMsg) {
         if (!gameInProgress || game.isGameEnded()) {
             return;
         }
@@ -194,10 +194,13 @@ public class GameState {
         String teamId = answerMsg.getTeamId();
         int answer = answerMsg.getAnswer();
 
-        // Verificar se a pergunta já terminou
-        Boolean ended = questionEnded.get(questionIndex);
-        if (ended == null || ended) {
-            return; // Pergunta já terminou, ignorar resposta tardia
+        // Verificar se a pergunta já terminou (sincronização apenas para leitura)
+        Boolean ended;
+        synchronized (this) {
+            ended = questionEnded.get(questionIndex);
+            if (ended == null || ended) {
+                return; // Pergunta já terminou, ignorar resposta tardia
+            }
         }
 
         // Verificar se o jogador já respondeu (prevenir duplicados)
@@ -207,9 +210,17 @@ public class GameState {
         }
         
         String playerKey = teamId + "_" + username;
-        if (!answered.add(playerKey)) {
-            // Jogador já respondeu, ignorar resposta duplicada
-            return;
+        synchronized (this) {
+            // Verificar novamente após adquirir lock
+            ended = questionEnded.get(questionIndex);
+            if (ended == null || ended) {
+                return;
+            }
+            
+            if (!answered.add(playerKey)) {
+                // Jogador já respondeu, ignorar resposta duplicada
+                return;
+            }
         }
 
         Question question = getCurrentQuestion();
@@ -227,18 +238,23 @@ public class GameState {
         boolean isCorrect = question.isCorrect(answer);
 
         if (isTeamQuestion) {
+            // IMPORTANTE: processTeamAnswer() bloqueia em await() - chamar FORA do synchronized
             processTeamAnswer(teamId, username, question, isCorrect, questionIndex);
+            // Para perguntas de equipa, a verificação de allAnswersReceived() 
+            // é feita dentro de processTeamAnswer() após await() retornar
         } else {
             processIndividualAnswer(teamId, username, question, isCorrect, questionIndex);
-        }
-
-        // Verificar se todas as respostas foram recebidas
-        if (allAnswersReceived(questionIndex)) {
-            // Verificar novamente dentro do synchronized para garantir execução única
-            Boolean stillEnded = questionEnded.get(questionIndex);
-            if (stillEnded != null && !stillEnded) {
-                questionEnded.put(questionIndex, true);
-                endQuestion(questionIndex);
+            
+            // Para perguntas individuais, verificar se todas as respostas foram recebidas
+            synchronized (this) {
+                if (allAnswersReceived(questionIndex)) {
+                    // Verificar novamente dentro do synchronized para garantir execução única
+                    Boolean stillEnded = questionEnded.get(questionIndex);
+                    if (stillEnded != null && !stillEnded) {
+                        questionEnded.put(questionIndex, true);
+                        endQuestion(questionIndex);
+                    }
+                }
             }
         }
     }
@@ -269,10 +285,49 @@ public class GameState {
             TeamBarrier barrier = teamBarriers.get(teamId);
             int position = barrier.await();
 
+            // Se position == -1, a barreira foi resetada (nova pergunta começou)
+            if (position == -1) {
+                // Thread da pergunta anterior - simplesmente sair
+                return;
+            }
+
+            // Verificar se a pergunta já terminou antes de processar
+            synchronized (this) {
+                Boolean ended = questionEnded.get(questionIndex);
+                if (ended != null && ended) {
+                    // Pergunta já terminou - não processar
+                    return;
+                }
+            }
+
+            // Calcular pontuação da equipa FORA do synchronized para evitar bloqueios
+            // Apenas o primeiro jogador da equipa calcula
             if (position == 1) {
-                // Primeiro jogador a chegar - calcular pontuação da equipa
                 calculateTeamScore(teamId, question, questionIndex);
             }
+
+            // Verificar se todas as respostas foram recebidas APÓS sair da barreira
+            // Isso permite terminar a pergunta imediatamente quando a última equipa completa
+            synchronized (this) {
+                // Verificar novamente se a pergunta já terminou
+                Boolean ended = questionEnded.get(questionIndex);
+                if (ended != null && ended) {
+                    return; // Já terminou (outra thread terminou primeiro)
+                }
+
+                // IMPORTANTE: Verificar dentro do synchronized para garantir consistência
+                if (allAnswersReceived(questionIndex)) {
+                    questionEnded.put(questionIndex, true);
+                    // Chamar endQuestion() fora do synchronized para evitar deadlock
+                } else {
+                    return; // Ainda faltam respostas
+                }
+            }
+            
+            // Chamar endQuestion() fora do synchronized para evitar problemas
+            // (já garantimos que apenas uma thread chega aqui)
+            endQuestion(questionIndex);
+            
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }

@@ -12,6 +12,7 @@ public class TeamBarrier {
     private final Condition condition;
     private final int timeout;
     private long startTime;
+    private int generation; // Geração da barreira - incrementa a cada reset
 
     public TeamBarrier(int teamSize, int timeout) {
         this.teamSize = teamSize;
@@ -21,14 +22,18 @@ public class TeamBarrier {
         this.condition = lock.newCondition();
         this.timeout = timeout;
         this.startTime = System.currentTimeMillis();
+        this.generation = 0;
     }
 
     public int await() throws InterruptedException {
         lock.lock();
         try {
             if (broken) {
+                // Barreira foi quebrada
                 return -1;
             }
+            
+            int savedGeneration = generation; // Capturar geração atual
 
             arrived++;
             int position = arrived;
@@ -40,7 +45,7 @@ public class TeamBarrier {
             }
 
             // Esperar pelos outros jogadores
-            while (arrived < teamSize && !broken) {
+            while (arrived < teamSize && !broken && savedGeneration == generation) {
                 long elapsed = System.currentTimeMillis() - startTime;
                 long remaining = timeout - elapsed;
 
@@ -53,6 +58,13 @@ public class TeamBarrier {
                 // Usar await com timeout para evitar bloqueio indefinido
                 try {
                     boolean timedOut = !condition.await(remaining, java.util.concurrent.TimeUnit.MILLISECONDS);
+                    
+                    // Verificar se uma nova geração começou (reset foi chamado)
+                    if (savedGeneration != generation) {
+                        // Nova pergunta começou - retornar indicando que barreira foi resetada
+                        return -1;
+                    }
+                    
                     if (timedOut && arrived < teamSize) {
                         broken = true;
                         condition.signalAll();
@@ -66,6 +78,11 @@ public class TeamBarrier {
                 }
             }
 
+            // Verificar novamente se geração mudou antes de retornar
+            if (savedGeneration != generation) {
+                return -1;
+            }
+
             return position;
 
         } finally {
@@ -76,10 +93,13 @@ public class TeamBarrier {
     public void reset() {
         lock.lock();
         try {
+            // Incrementar geração para invalidar threads antigas
+            generation++;
             arrived = 0;
             broken = false;
             startTime = System.currentTimeMillis();
-            condition.signalAll(); // Acordar threads bloqueadas
+            // NÃO chamar signalAll aqui - threads antigas verificam geração e saem naturalmente
+            // Threads novas (da nova pergunta) usarão a nova geração
         } finally {
             lock.unlock();
         }
